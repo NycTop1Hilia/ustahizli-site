@@ -30,14 +30,24 @@ app.get("/webhook", (req, res) => {
 app.post("/webhook", (req, res) => {
   const body = req.body;
 
-  messages.unshift({
+  const entry = body.entry?.[0];
+  const messaging = entry?.messaging?.[0];
+
+  const cleanMessage = {
     id: Date.now(),
     source: "Instagram DM",
-    data: body,
+    senderId: messaging?.sender?.id || null,
+    recipientId: messaging?.recipient?.id || null,
+    text: messaging?.message?.text || null,
+    messageId: messaging?.message?.mid || null,
+    timestamp: messaging?.timestamp || null,
+    raw: body,
     createdAt: new Date().toISOString(),
-  });
+  };
 
-  console.log("Instagram webhook geldi:", JSON.stringify(body, null, 2));
+  messages.unshift(cleanMessage);
+
+  console.log("Instagram webhook geldi:", JSON.stringify(cleanMessage, null, 2));
 
   res.sendStatus(200);
 });
