@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "123456";
-const API_URL = "http://localhost:3000";
+const API_URL = "https://ustahizli-backend.onrender.com";
 
 export default function App() {
   const [page, setPage] = useState("home");
