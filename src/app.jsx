@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "123456";
+const API_URL = "http://localhost:3000";
 
 export default function App() {
   const [page, setPage] = useState("home");
@@ -30,25 +31,51 @@ export default function App() {
     });
   }, [requests, search, filter]);
 
-  const createRequest = (e) => {
-    e.preventDefault();
-    if (!form.phone.trim()) {
-      alert("Lütfen telefon numarası gir.");
-      return;
+  const createRequest = async (e) => {
+  e.preventDefault();
+
+  if (!form.phone.trim()) {
+    alert("Lütfen telefon numarası gir.");
+    return;
+  }
+
+  try {
+  const response = await fetch(`${API_URL}/requests`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        name: "Müşteri",
+        phone: form.phone,
+        district: form.district,
+        serviceType: form.service,
+        description: form.service + " hizmet talebi",
+      }),
+    });
+
+    const data = await response.json();
+
+    if (data.success) {
+      alert("Talep başarıyla oluşturuldu.");
+
+      setForm({
+        ...form,
+        phone: "",
+      });
+
+    const updated = await fetch(`${API_URL}/requests`);
+      const requestsData = await updated.json();
+
+      setRequests(requestsData);
+
+      setPage("home");
     }
-    const newRequest = {
-      id: Date.now(),
-      service: form.service,
-      district: form.district,
-      phone: form.phone,
-      status: "Bekliyor",
-      date: new Date().toLocaleString("tr-TR"),
-    };
-    setRequests([newRequest, ...requests]);
-    setForm({ ...form, phone: "" });
-    alert("Teklif talebin oluşturuldu. Admin paneline giriş yapınca talebi görebilirsin.");
-    setPage("home");
-  };
+  } catch (error) {
+    console.error(error);
+    alert("Sunucu bağlantı hatası.");
+  }
+};
 
   const login = (e) => {
     e.preventDefault();
