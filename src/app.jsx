@@ -5,7 +5,7 @@ const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "123456";
 const API_URL = "https://ustahizli-backend.onrender.com";
 const PARTICIPATION_FEE = 15;
-const STORAGE_KEY = "ustahizli-demo-state-v7";
+const STORAGE_KEY = "ustahizli-demo-state-v9";
 
 const loadSavedState = () => {
   try {
@@ -119,6 +119,8 @@ export default function App() {
   const [filter, setFilter] = useState("Tümü");
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [selectedRequestIds, setSelectedRequestIds] = useState([]);
+  const [deletedRequestIds, setDeletedRequestIds] = useState(Array.isArray(savedState.deletedRequestIds) ? savedState.deletedRequestIds : []);
+  const [adminCancelDetailJob, setAdminCancelDetailJob] = useState(null);
   const [form, setForm] = useState({
     service: "Avize Montajı",
     district: "Bornova",
@@ -133,6 +135,7 @@ export default function App() {
   const [masterAuthMode, setMasterAuthMode] = useState("login");
 
   const [masterTab, setMasterTab] = useState("auctions");
+  const [jobFilter, setJobFilter] = useState("Tümü");
   const [bidAmounts, setBidAmounts] = useState({});
   const [cancelModalJob, setCancelModalJob] = useState(null);
   const [cancelReason, setCancelReason] = useState("Müşteri cevap vermedi");
@@ -146,7 +149,9 @@ export default function App() {
       setLoadingRequests(true);
       const response = await fetch(`${API_URL}/requests`);
       const data = await response.json();
-      setRequests(Array.isArray(data) ? data : []);
+      const incomingRequests = Array.isArray(data) ? data : [];
+      const deletedSet = new Set((loadSavedState().deletedRequestIds || deletedRequestIds).map(String));
+      setRequests(incomingRequests.filter((item) => !deletedSet.has(String(item.id))));
     } catch (error) {
       console.error("Talepler alınamadı:", error);
     } finally {
@@ -173,12 +178,13 @@ export default function App() {
           auctionRequests,
           offers,
           currentMaster,
+          deletedRequestIds,
         })
       );
     } catch (error) {
       console.error("Demo kayıt verisi saklanamadı:", error);
     }
-  }, [auctionRequests, offers, currentMaster]);
+  }, [auctionRequests, offers, currentMaster, deletedRequestIds]);
 
   useEffect(() => {
     const syncSavedState = () => {
@@ -194,6 +200,10 @@ export default function App() {
 
       if (freshState.currentMaster && isMasterLoggedIn) {
         setCurrentMaster(freshState.currentMaster);
+      }
+
+      if (Array.isArray(freshState.deletedRequestIds)) {
+        setDeletedRequestIds(freshState.deletedRequestIds);
       }
     };
 
@@ -232,9 +242,10 @@ export default function App() {
     const value = status || "İhalede";
 
     if (value === "İhalede") return "bg-blue-600 text-white";
-    if (value === "Devam Ediyor") return "bg-yellow-600 text-white";
+    if (value === "Ustaya Yönlendirildi") return "bg-yellow-600 text-white";
     if (value === "Tamamlandı") return "bg-green-600 text-white";
     if (value === "İş İptal Oldu") return "bg-black text-white";
+    if (value === "İhale Başarısız Oldu" || value === "İhale Sonuçlandırılamadı") return "bg-red-700 text-white";
 
     return "bg-slate-700 text-white";
   };
@@ -247,11 +258,11 @@ export default function App() {
   const getAuctionStatusLabel = (request) => {
     if (!request) return "İhalede";
     if (request.status === "auction") return "İhalede";
-    if (request.status === "unresolved") return "İhale sonuçlandırılamadı";
+    if (request.status === "unresolved") return "İhale Başarısız Oldu";
     if (request.status === "won") {
       if (request.jobStatus === "Tamamlandı") return "İş tamamlandı";
       if (request.jobStatus === "İptal Edildi") return "İş iptal oldu";
-      return "Ustaya iletişim bilgileri verildi";
+      return "Ustaya Yönlendirildi";
     }
     return "İhalede";
   };
@@ -271,15 +282,15 @@ export default function App() {
     if (auction.status === "won") {
       if (auction.jobStatus === "Tamamlandı") return "Tamamlandı";
       if (auction.jobStatus === "İptal Edildi") return "İş İptal Oldu";
-      return "Devam Ediyor";
+      return "Ustaya Yönlendirildi";
     }
-    if (auction.status === "unresolved") return "İhale sonuçlandırılamadı";
+    if (auction.status === "unresolved") return "İhale Sonuçlandırılamadı";
     return item.status || "İhalede";
   };
 
   const instagramCount = requests.filter((item) => item.source === "Instagram DM").length;
   const siteCount = requests.filter((item) => item.source !== "Instagram DM").length;
-  const newCount = auctionRequests.filter((item) => item.status === "auction" && item.endsAt > now).length;
+  const newCount = auctionRequests.filter((item) => item.status === "auction" && item.endsAt > now && !deletedRequestIds.map(String).includes(String(item.requestSourceId)) && (requests.length === 0 || item.requestSourceId === undefined || requests.some((req) => String(req.id) === String(item.requestSourceId)))).length;
 
   const districtCounts = useMemo(() => {
     const counts = {};
@@ -296,7 +307,7 @@ export default function App() {
     });
 
     return counts;
-  }, [requests]);
+  }, [requests, deletedRequestIds]);
 
   const filteredRequests = useMemo(() => {
     return requests.filter((item) => {
@@ -318,7 +329,19 @@ export default function App() {
 
       return matchesSearch && matchesFilter;
     });
-  }, [requests, search, filter, auctionRequests]);
+  }, [requests, search, filter, auctionRequests, deletedRequestIds]);
+
+  const liveRequestIdSet = useMemo(() => new Set(requests.map((item) => String(item.id))), [requests]);
+
+  const visibleAuctionRequests = useMemo(() => {
+    const deletedSet = new Set(deletedRequestIds.map(String));
+    return auctionRequests.filter((request) => {
+      const sourceId = request.requestSourceId;
+      if (sourceId !== undefined && sourceId !== null && deletedSet.has(String(sourceId))) return false;
+      if (requests.length > 0 && sourceId !== undefined && sourceId !== null && !liveRequestIdSet.has(String(sourceId))) return false;
+      return true;
+    });
+  }, [auctionRequests, deletedRequestIds, requests.length, liveRequestIdSet]);
 
 
   const buildAuctionFromRequest = (item) => {
@@ -353,19 +376,21 @@ export default function App() {
   useEffect(() => {
     if (!requests.length) return;
 
+    const deletedSet = new Set(deletedRequestIds.map(String));
     setAuctionRequests((prev) => {
       const existingIds = new Set(prev.map((auction) => auction.requestSourceId || auction.id));
       const existingFingerprints = new Set(prev.map((auction) => getAuctionFingerprint(auction)));
       const newAuctions = requests
         .filter((item) => item.id !== undefined && item.id !== null)
-        .filter((item) => !["Tamamlandı", "İş İptal Oldu", "İhale sonuçlandırılamadı"].includes(getUnifiedRequestStatus(item)))
+        .filter((item) => !deletedSet.has(String(item.id)))
+        .filter((item) => !["Tamamlandı", "İş İptal Oldu", "İhale Başarısız Oldu"].includes(getUnifiedRequestStatus(item)))
         .map(buildAuctionFromRequest)
         .filter((auction) => !existingIds.has(auction.requestSourceId) && !existingFingerprints.has(getAuctionFingerprint(auction)));
 
       if (newAuctions.length === 0) return prev;
       return [...newAuctions, ...prev];
     });
-  }, [requests]);
+  }, [requests, deletedRequestIds]);
 
   const createRequest = async (e) => {
     e.preventDefault();
@@ -493,8 +518,12 @@ export default function App() {
           return { ...auction, status: "auction", jobStatus: undefined, unresolvedAt: undefined, adminResultNote: undefined };
         }
 
-        if (status === "Devam Ediyor") {
-          return { ...auction, status: "won", jobStatus: "Devam Ediyor" };
+        if (status === "Ustaya Yönlendirildi") {
+          return { ...auction, status: "won", jobStatus: "Ustaya Yönlendirildi" };
+        }
+
+        if (status === "İhale Başarısız Oldu" || status === "İhale Sonuçlandırılamadı") {
+          return { ...auction, status: "unresolved", adminResultNote: "İhale sonuçlandırılamadı", unresolvedAt: new Date().toISOString() };
         }
 
         if (status === "Tamamlandı") {
@@ -524,9 +553,14 @@ export default function App() {
     if (!confirmDelete) return;
 
     const selectedSet = new Set(selectedRequestIds.map(String));
+    setDeletedRequestIds((prev) => Array.from(new Set([...prev.map(String), ...selectedSet])));
     setRequests((prev) => prev.filter((item) => !selectedSet.has(String(item.id))));
-    setAuctionRequests((prev) => prev.filter((auction) => !selectedSet.has(String(auction.requestSourceId)) && !selectedSet.has(String(auction.id).replace("request-", ""))));
-    setOffers((prev) => prev.filter((offer) => !selectedSet.has(String(offer.requestSourceId))));
+    setAuctionRequests((prev) =>
+      prev.filter((auction) => !selectedSet.has(String(auction.requestSourceId)) && !selectedSet.has(String(auction.id).replace("request-", "")))
+    );
+    setOffers((prev) =>
+      prev.filter((offer) => !selectedSet.has(String(offer.requestSourceId)) && !selectedSet.has(String(offer.requestId).replace("request-", "")))
+    );
     setSelectedRequestIds([]);
   };
 
@@ -551,11 +585,22 @@ export default function App() {
       setAuctionRequests([]);
       setOffers([]);
       setSelectedRequestIds([]);
+      setDeletedRequestIds([]);
       await fetchRequests();
     } catch (error) {
       console.error(error);
       alert("Talepler temizlenemedi.");
     }
+  };
+
+
+  const refreshAll = async () => {
+    const freshState = loadSavedState();
+    if (Array.isArray(freshState.auctionRequests)) setAuctionRequests(freshState.auctionRequests);
+    if (Array.isArray(freshState.offers)) setOffers(freshState.offers);
+    if (Array.isArray(freshState.deletedRequestIds)) setDeletedRequestIds(freshState.deletedRequestIds);
+    if (freshState.currentMaster && isMasterLoggedIn) setCurrentMaster(freshState.currentMaster);
+    await fetchRequests();
   };
 
   const getWhatsappLink = (item) => {
@@ -583,8 +628,9 @@ export default function App() {
     const fingerprint = getAuctionFingerprint(request);
     return offers.filter((offer) => {
       return (
-        offer.requestId === request.id ||
-        offer.requestSourceId === request.requestSourceId ||
+        String(offer.requestId) === String(request.id) ||
+        String(offer.requestSourceId) === String(request.requestSourceId) ||
+        String(offer.requestId).replace("request-", "") === String(request.requestSourceId) ||
         offer.auctionFingerprint === fingerprint
       );
     });
@@ -600,6 +646,42 @@ export default function App() {
     const requestOffers = getAuctionOffersForRequest(request).filter((offer) => offer.status !== "cancelled");
     if (requestOffers.length === 0) return null;
     return Math.min(...requestOffers.map((offer) => offer.amount));
+  };
+
+
+  const getBaseMasterBalance = (master = currentMaster) => {
+    const account = MASTER_ACCOUNTS.find((item) => item.id === master?.id);
+    return Number(account?.balance ?? master?.initialBalance ?? master?.balance ?? 0);
+  };
+
+  const getAuctionChargeKey = (offer) => {
+    return String(offer.auctionFingerprint || offer.requestId || offer.requestSourceId || "");
+  };
+
+  const getChargedAuctionCountForMaster = (masterId = currentMaster.id) => {
+    const chargedKeys = new Set();
+    offers.forEach((offer) => {
+      if (offer.masterId !== masterId) return;
+      if (Number(offer.participationFee || 0) <= 0) return;
+      if (offer.status === "lost_refunded") return;
+      chargedKeys.add(getAuctionChargeKey(offer));
+    });
+    return chargedKeys.size;
+  };
+
+  const getEffectiveMasterBalance = (master = currentMaster) => {
+    const baseBalance = getBaseMasterBalance(master);
+    const topUpTotal = Number(master?.topUpTotal || 0);
+    const chargedTotal = getChargedAuctionCountForMaster(master?.id) * PARTICIPATION_FEE;
+    return baseBalance + topUpTotal - chargedTotal;
+  };
+
+  const addMasterBalance = (amount) => {
+    setCurrentMaster((prev) => ({
+      ...prev,
+      topUpTotal: Number(prev.topUpTotal || 0) + amount,
+      balance: getEffectiveMasterBalance(prev) + amount,
+    }));
   };
 
   const formatTimeLeft = (endsAt) => {
@@ -630,31 +712,37 @@ export default function App() {
       return;
     }
 
-    if (currentMaster.balance < PARTICIPATION_FEE) {
+    const currentAuctionOffers = getAuctionOffersForRequest(request);
+    const masterAlreadyPaidForAuction = currentAuctionOffers.some(
+      (offer) => offer.masterId === currentMaster.id && Number(offer.participationFee || 0) > 0
+    );
+
+    if (!masterAlreadyPaidForAuction && getEffectiveMasterBalance() < PARTICIPATION_FEE) {
       alert("Yetersiz bakiye.");
       return;
     }
 
-    setCurrentMaster((prev) => ({
-      ...prev,
-      balance: prev.balance - PARTICIPATION_FEE,
-    }));
+    const newOffer = {
+      id: Date.now().toString(),
+      requestId,
+      requestSourceId: request.requestSourceId,
+      auctionFingerprint: getAuctionFingerprint(request),
+      masterId: currentMaster.id,
+      masterName: currentMaster.name,
+      amount,
+      participationFee: masterAlreadyPaidForAuction ? 0 : PARTICIPATION_FEE,
+      status: "auction",
+      createdAt: new Date().toISOString(),
+    };
 
-    setOffers((prev) => [
-      ...prev,
-      {
-        id: Date.now().toString(),
-        requestId,
-        requestSourceId: request.requestSourceId,
-        auctionFingerprint: getAuctionFingerprint(request),
-        masterId: currentMaster.id,
-        masterName: currentMaster.name,
-        amount,
-        participationFee: PARTICIPATION_FEE,
-        status: "auction",
-        createdAt: new Date().toISOString(),
-      },
-    ]);
+    setOffers((prev) => [...prev, newOffer]);
+
+    if (!masterAlreadyPaidForAuction) {
+      setCurrentMaster((prev) => ({
+        ...prev,
+        balance: Math.max(0, getEffectiveMasterBalance(prev) - PARTICIPATION_FEE),
+      }));
+    }
 
     setBidAmounts((prev) => ({ ...prev, [requestId]: "" }));
     alert("Teklif başarıyla verildi.");
@@ -686,12 +774,14 @@ export default function App() {
       offer.amount < lowest.amount ? offer : lowest
     );
 
-    const refundAmountForCurrentMaster = requestOffers
-      .filter((offer) => offer.id !== winningOffer.id && offer.masterId === currentMaster.id)
-      .reduce((total, offer) => total + offer.participationFee, 0);
+    const currentMasterOffersInAuction = requestOffers.filter((offer) => offer.masterId === currentMaster.id);
+    const currentMasterWon = winningOffer.masterId === currentMaster.id;
+    const refundAmountForCurrentMaster = currentMasterWon
+      ? 0
+      : Math.max(0, ...currentMasterOffersInAuction.map((offer) => Number(offer.participationFee || 0)));
 
     if (refundAmountForCurrentMaster > 0) {
-      setCurrentMaster((prev) => ({ ...prev, balance: prev.balance + refundAmountForCurrentMaster }));
+      setCurrentMaster((prev) => ({ ...prev, balance: getEffectiveMasterBalance(prev) + refundAmountForCurrentMaster }));
     }
 
     setOffers((prev) =>
@@ -700,7 +790,7 @@ export default function App() {
           ? offer.requestId === requestId || offer.requestSourceId === currentAuction.requestSourceId || offer.auctionFingerprint === getAuctionFingerprint(currentAuction)
           : offer.requestId === requestId;
         if (!belongsToAuction) return offer;
-        if (offer.id === winningOffer.id) return { ...offer, status: "won" };
+        if (offer.masterId === winningOffer.masterId) return { ...offer, status: "won" };
         return { ...offer, status: "lost_refunded" };
       })
     );
@@ -714,7 +804,7 @@ export default function App() {
               winnerMasterId: winningOffer.masterId,
               winnerMasterName: winningOffer.masterName,
               winningOfferAmount: winningOffer.amount,
-              jobStatus: "Devam Ediyor",
+              jobStatus: "Ustaya Yönlendirildi",
               wonAt: new Date().toISOString(),
             }
           : request
@@ -749,6 +839,10 @@ export default function App() {
 
   const confirmCancelJob = () => {
     if (!cancelModalJob) return;
+    if (!cancelNote.trim()) {
+      alert("Lütfen işin neden iptal olduğunu açıklama alanına yaz.");
+      return;
+    }
 
     setAuctionRequests((prev) =>
       prev.map((job) =>
@@ -775,10 +869,17 @@ export default function App() {
   };
 
   const masterOffers = offers.filter((offer) => offer.masterId === currentMaster.id);
-  const openAuctions = auctionRequests.filter((request) => request.status === "auction" && request.endsAt > now);
-  const myJobs = auctionRequests.filter(
+  const openAuctions = visibleAuctionRequests.filter((request) => request.status === "auction" && request.endsAt > now);
+  const myJobs = visibleAuctionRequests.filter(
     (request) => request.status === "won" && request.winnerMasterId === currentMaster.id
   );
+  const filteredMyJobs = myJobs.filter((job) => {
+    if (jobFilter === "Tümü") return true;
+    if (jobFilter === "Devam Eden") return !["Tamamlandı", "İptal Edildi"].includes(job.jobStatus);
+    if (jobFilter === "Tamamlanan") return job.jobStatus === "Tamamlandı";
+    if (jobFilter === "İptal Olan") return job.jobStatus === "İptal Edildi";
+    return true;
+  });
   const completedJobs = myJobs.filter((job) => job.jobStatus === "Tamamlandı").length;
   const cancelledJobs = myJobs.filter((job) => job.jobStatus === "İptal Edildi").length;
   const activeJobs = myJobs.filter((job) => !["Tamamlandı", "İptal Edildi"].includes(job.jobStatus)).length;
@@ -848,9 +949,9 @@ export default function App() {
 
                 <div className="mt-5 rounded-2xl bg-white/5 border border-white/10 p-4">
                   <p className="text-sm text-slate-300">Bakiyem</p>
-                  <p className="text-2xl font-black text-green-400">{currentMaster.balance},00 TL</p>
+                  <p className="text-2xl font-black text-green-400">{getEffectiveMasterBalance()},00 TL</p>
                   <button
-                    onClick={() => setCurrentMaster((prev) => ({ ...prev, balance: prev.balance + 100 }))}
+                    onClick={() => addMasterBalance(100)}
                     className="mt-3 w-full border border-green-400 text-green-400 rounded-xl py-2 font-black hover:bg-green-400 hover:text-slate-950 transition"
                   >
                     Bakiye Yükle
@@ -891,7 +992,7 @@ export default function App() {
                       <MasterStat icon="📄" title="Açık İhale" value={openAuctions.length} />
                       <MasterStat icon="🧾" title="Tekliflerim" value={masterOffers.length} />
                       <MasterStat icon="💼" title="Kazanılan İş" value={myJobs.length} />
-                      <MasterStat icon="💳" title="Bakiye" value={`${currentMaster.balance},00 TL`} green />
+                      <MasterStat icon="💳" title="Bakiye" value={`${getEffectiveMasterBalance()},00 TL`} green />
                     </div>
 
                     <div className="space-y-4">
@@ -1021,17 +1122,22 @@ export default function App() {
                     </div>
 
                     <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-4 mb-4 flex gap-6 text-sm font-bold overflow-x-auto">
-                      <button className="text-blue-600 border-b-2 border-blue-600 pb-2">Tümü</button>
-                      <button>Devam Eden</button>
-                      <button>Tamamlanan</button>
-                      <button>İptal Olan</button>
+                      {["Tümü", "Devam Eden", "Tamamlanan", "İptal Olan"].map((tab) => (
+                        <button
+                          key={tab}
+                          onClick={() => setJobFilter(tab)}
+                          className={jobFilter === tab ? "text-blue-600 border-b-2 border-blue-600 pb-2" : "pb-2 text-slate-950 hover:text-blue-600"}
+                        >
+                          {tab}
+                        </button>
+                      ))}
                     </div>
 
                     <div className="space-y-4">
-                      {myJobs.length === 0 ? (
+                      {filteredMyJobs.length === 0 ? (
                         <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-10 text-center text-slate-500">Henüz kazandığın iş yok.</div>
                       ) : (
-                        myJobs.map((job) => (
+                        filteredMyJobs.map((job) => (
                           <div key={job.id} className="bg-white rounded-2xl shadow-md border border-slate-200 p-4 grid grid-cols-1 xl:grid-cols-[1.1fr_0.7fr_0.6fr] gap-5 items-center">
                             <div className="flex gap-4">
                               <div className="hidden md:flex w-36 h-36 rounded-xl bg-slate-100 items-center justify-center text-6xl shrink-0">
@@ -1092,7 +1198,7 @@ export default function App() {
                     <div className="bg-white rounded-2xl shadow-md border border-blue-200 p-5">
                       <h2 className="text-xl font-black mb-4">İş Durumları Hakkında</h2>
                       <div className="space-y-3 text-sm">
-                        <p><b className="text-green-700">Devam Ediyor:</b> Müşteri bilgileri açık, iş devam ediyor.</p>
+                        <p><b className="text-green-700">Ustaya Yönlendirildi:</b> Müşteri bilgileri ustaya verildi, iş devam ediyor.</p>
                         <p><b className="text-green-700">Tamamlandı:</b> İş başarıyla tamamlandı.</p>
                         <p><b className="text-red-700">İptal Edildi:</b> İş iptal edildi.</p>
                       </div>
@@ -1155,9 +1261,9 @@ export default function App() {
                 <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-6 mb-5 flex flex-col md:flex-row justify-between gap-4">
                   <div>
                     <p className="text-slate-500">Mevcut Bakiye</p>
-                    <h2 className="text-4xl font-black text-green-700">{currentMaster.balance},00 TL</h2>
+                    <h2 className="text-4xl font-black text-green-700">{getEffectiveMasterBalance()},00 TL</h2>
                   </div>
-                  <button onClick={() => setCurrentMaster((prev) => ({ ...prev, balance: prev.balance + 100 }))} className="bg-blue-600 text-white rounded-xl px-8 py-3 font-black">
+                  <button onClick={() => addMasterBalance(100)} className="bg-blue-600 text-white rounded-xl px-8 py-3 font-black">
                     Bakiye Yükle
                   </button>
                 </div>
@@ -1283,10 +1389,17 @@ export default function App() {
 
               <div className="flex items-center gap-4">
                 <button onClick={() => setPage("master")} className="hidden md:block bg-blue-600 text-white rounded-2xl px-5 py-3 font-black">Usta Paneli</button>
-                <div className="relative w-12 h-12 rounded-2xl bg-[#082851] flex items-center justify-center">
+                <button
+                  onClick={() => {
+                    setFilter("İhalede");
+                    setTimeout(() => document.getElementById("talep-listesi")?.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+                  }}
+                  className="relative w-12 h-12 rounded-2xl bg-[#082851] flex items-center justify-center hover:bg-[#0b3266] transition"
+                  title="Yeni talepleri göster"
+                >
                   🔔
                   {newCount > 0 && <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-black">{newCount}</span>}
-                </div>
+                </button>
                 <button onClick={logout} className="bg-white text-slate-950 rounded-2xl px-5 py-3 font-black lg:hidden">Çıkış yap</button>
               </div>
             </header>
@@ -1318,7 +1431,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {auctionRequests.map((request) => {
+                      {visibleAuctionRequests.map((request) => {
                         const lowestOffer = getLowestOfferForRequest(request);
                         return (
                           <tr key={request.id} className="border-t border-blue-400/10 align-top">
@@ -1333,7 +1446,7 @@ export default function App() {
                               )}
                               {request.status === "unresolved" && (
                                 <div className="mt-2 text-red-400 font-black">
-                                  İhale sonuçlandırılamadı: teklif gelmedi.
+                                  İhale başarısız oldu: teklif gelmedi.
                                 </div>
                               )}
                             </td>
@@ -1344,6 +1457,14 @@ export default function App() {
                               <span className={getAuctionStatusClass(request)}>
                                 {getAuctionStatusLabel(request)}
                               </span>
+                              {request.jobStatus === "İptal Edildi" && (
+                                <button
+                                  onClick={() => setAdminCancelDetailJob(request)}
+                                  className="ml-2 bg-white/10 border border-white/20 text-white px-3 py-1 rounded-lg text-xs font-black hover:bg-white/20"
+                                >
+                                  Açıklama
+                                </button>
+                              )}
                             </td>
                           </tr>
                         );
@@ -1354,13 +1475,13 @@ export default function App() {
               </div>
 
               <div className="grid grid-cols-1 2xl:grid-cols-[1.35fr_0.85fr] gap-6">
-                <div className="rounded-2xl bg-[#041b38]/90 border border-blue-400/20 overflow-hidden shadow-2xl">
+                <div id="talep-listesi" className="rounded-2xl bg-[#041b38]/90 border border-blue-400/20 overflow-hidden shadow-2xl">
                   <div className="p-5 border-b border-blue-400/20 flex flex-col lg:flex-row gap-4 justify-between">
                     <div>
                       <h2 className="text-2xl font-black">Talep Listesi</h2>
                       <p className="text-xs text-slate-400 mt-1">Instagram DM ve site formları</p>
                     </div>
-                    <button onClick={fetchRequests} className="bg-blue-600 px-5 py-3 rounded-xl font-black">Yenile</button>
+                    <button onClick={refreshAll} className="bg-blue-600 px-5 py-3 rounded-xl font-black">Yenile</button>
                   </div>
 
                   <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-3">
@@ -1368,9 +1489,10 @@ export default function App() {
                     <select value={filter} onChange={(e) => setFilter(e.target.value)} className="rounded-xl bg-[#021026] border border-blue-400/20 px-4 py-3 text-white outline-none">
                       <option>Tümü</option>
                       <option>İhalede</option>
-                      <option>Devam Ediyor</option>
+                      <option>Ustaya Yönlendirildi</option>
                       <option>Tamamlandı</option>
                       <option>İş İptal Oldu</option>
+                      <option>İhale Sonuçlandırılamadı</option>
                     </select>
                     <button onClick={handleRequestDeleteButton} className="rounded-xl bg-red-700 px-4 py-3 font-black text-white">{selectedRequestIds.length > 0 ? "Seçili işleri sil" : "Tüm talepleri temizle"}</button>
                   </div>
@@ -1412,7 +1534,25 @@ export default function App() {
                               <td className="p-4">{item.district || "Belirtilmedi"}</td>
                               <td className="p-4">{item.phone || "-"}</td>
                               <td className="p-4 max-w-[280px] text-slate-300">{item.description || "-"}</td>
-                              <td className="p-4"><select value={getUnifiedRequestStatus(item)} onChange={(e) => updateStatus(item.id, e.target.value)} className={`${getStatusClass(getUnifiedRequestStatus(item))} rounded-lg px-3 py-2 outline-none font-bold`}><option>İhalede</option><option>Devam Ediyor</option><option>Tamamlandı</option><option>İş İptal Oldu</option></select></td>
+                              <td className="p-4">
+                                <div className="flex items-center gap-2">
+                                  <select value={getUnifiedRequestStatus(item)} onChange={(e) => updateStatus(item.id, e.target.value)} className={`${getStatusClass(getUnifiedRequestStatus(item))} rounded-lg px-3 py-2 outline-none font-bold`}>
+                                    <option>İhalede</option>
+                                    <option>Ustaya Yönlendirildi</option>
+                                    <option>Tamamlandı</option>
+                                    <option>İş İptal Oldu</option>
+                                    <option>İhale Sonuçlandırılamadı</option>
+                                  </select>
+                                  {getAuctionForRequest(item)?.jobStatus === "İptal Edildi" && (
+                                    <button
+                                      onClick={() => setAdminCancelDetailJob(getAuctionForRequest(item))}
+                                      className="bg-white/10 border border-white/20 text-white px-3 py-2 rounded-lg text-xs font-black hover:bg-white/20 whitespace-nowrap"
+                                    >
+                                      Açıklama
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
                               <td className="p-4 whitespace-nowrap text-slate-300">{getDate(item)}</td>
                               <td className="p-4">{item.phone ? <a href={getWhatsappLink(item)} target="_blank" rel="noreferrer" className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold inline-block">WhatsApp</a> : <span className="text-slate-500 text-sm">Telefon yok</span>}</td>
                             </tr>
@@ -1464,6 +1604,25 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {adminCancelDetailJob && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                  <div className="bg-white text-slate-950 rounded-2xl shadow-2xl max-w-md w-full p-6">
+                    <div className="flex justify-between items-center border-b pb-4 mb-4">
+                      <h2 className="text-2xl font-black">İptal Açıklaması</h2>
+                      <button onClick={() => setAdminCancelDetailJob(null)} className="text-2xl">×</button>
+                    </div>
+                    <p className="font-black mb-2">{adminCancelDetailJob.title}</p>
+                    <p className="text-sm mb-3"><b>Usta:</b> {adminCancelDetailJob.winnerMasterName || "-"}</p>
+                    <p className="text-sm mb-3"><b>İptal sebebi:</b> {adminCancelDetailJob.cancelReason || "Sebep belirtilmedi"}</p>
+                    <div className="bg-slate-100 rounded-xl p-4 text-sm whitespace-pre-wrap">
+                      {adminCancelDetailJob.cancelNote || "Ek açıklama yazılmadı."}
+                    </div>
+                    <button onClick={() => setAdminCancelDetailJob(null)} className="mt-5 w-full rounded-xl bg-blue-600 text-white py-3 font-black">Kapat</button>
+                  </div>
+                </div>
+              )}
+
             </section>
           </main>
         </div>
