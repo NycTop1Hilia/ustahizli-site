@@ -117,6 +117,9 @@ export default function App() {
   const [requests, setRequests] = useState([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("Tümü");
+  const [auctionPage, setAuctionPage] = useState(1);
+  const [requestPage, setRequestPage] = useState(1);
+  const [requestPageSize, setRequestPageSize] = useState(10);
   const [loadingRequests, setLoadingRequests] = useState(false);
   const [selectedRequestIds, setSelectedRequestIds] = useState([]);
   const [deletedRequestIds, setDeletedRequestIds] = useState(Array.isArray(savedState.deletedRequestIds) ? savedState.deletedRequestIds : []);
@@ -342,6 +345,33 @@ export default function App() {
       return true;
     });
   }, [auctionRequests, deletedRequestIds, requests.length, liveRequestIdSet]);
+
+  const auctionPageSize = 10;
+  const auctionTotalPages = Math.max(1, Math.ceil(visibleAuctionRequests.length / auctionPageSize));
+  const safeAuctionPage = Math.min(auctionPage, auctionTotalPages);
+  const paginatedAuctionRequests = visibleAuctionRequests.slice(
+    (safeAuctionPage - 1) * auctionPageSize,
+    safeAuctionPage * auctionPageSize
+  );
+
+  const requestTotalPages = Math.max(1, Math.ceil(filteredRequests.length / requestPageSize));
+  const safeRequestPage = Math.min(requestPage, requestTotalPages);
+  const paginatedFilteredRequests = filteredRequests.slice(
+    (safeRequestPage - 1) * requestPageSize,
+    safeRequestPage * requestPageSize
+  );
+
+  useEffect(() => {
+    if (auctionPage > auctionTotalPages) setAuctionPage(auctionTotalPages);
+  }, [auctionPage, auctionTotalPages]);
+
+  useEffect(() => {
+    setRequestPage(1);
+  }, [search, filter, requestPageSize]);
+
+  useEffect(() => {
+    if (requestPage > requestTotalPages) setRequestPage(requestTotalPages);
+  }, [requestPage, requestTotalPages]);
 
 
   const buildAuctionFromRequest = (item) => {
@@ -1135,7 +1165,12 @@ export default function App() {
 
                     <div className="space-y-4">
                       {filteredMyJobs.length === 0 ? (
-                        <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-10 text-center text-slate-500">Henüz kazandığın iş yok.</div>
+                        <div className="bg-white rounded-2xl shadow-md border border-slate-200 p-10 text-center text-slate-500">
+                          {jobFilter === "Tümü" && "Henüz kazandığınız ihale bulunmamaktadır."}
+                          {jobFilter === "Devam Eden" && "Henüz devam eden işiniz bulunmamaktadır."}
+                          {jobFilter === "Tamamlanan" && "Henüz tamamladığınız iş bulunmamaktadır."}
+                          {jobFilter === "İptal Olan" && "Henüz iptal edilen işiniz bulunmamaktadır."}
+                        </div>
                       ) : (
                         filteredMyJobs.map((job) => (
                           <div key={job.id} className="bg-white rounded-2xl shadow-md border border-slate-200 p-4 grid grid-cols-1 xl:grid-cols-[1.1fr_0.7fr_0.6fr] gap-5 items-center">
@@ -1431,7 +1466,7 @@ export default function App() {
                       </tr>
                     </thead>
                     <tbody>
-                      {visibleAuctionRequests.map((request) => {
+                      {paginatedAuctionRequests.map((request) => {
                         const lowestOffer = getLowestOfferForRequest(request);
                         return (
                           <tr key={request.id} className="border-t border-blue-400/10 align-top">
@@ -1472,6 +1507,11 @@ export default function App() {
                     </tbody>
                   </table>
                 </div>
+                <Pagination
+                  currentPage={safeAuctionPage}
+                  totalPages={auctionTotalPages}
+                  onPageChange={setAuctionPage}
+                />
               </div>
 
               <div className="grid grid-cols-1 2xl:grid-cols-[1.35fr_0.85fr] gap-6">
@@ -1484,7 +1524,7 @@ export default function App() {
                     <button onClick={refreshAll} className="bg-blue-600 px-5 py-3 rounded-xl font-black">Yenile</button>
                   </div>
 
-                  <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+                  <div className="p-5 grid grid-cols-1 md:grid-cols-4 gap-3">
                     <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Hizmet, ilçe, açıklama ara" className="rounded-xl bg-[#021026] border border-blue-400/20 px-4 py-3 text-white outline-none" />
                     <select value={filter} onChange={(e) => setFilter(e.target.value)} className="rounded-xl bg-[#021026] border border-blue-400/20 px-4 py-3 text-white outline-none">
                       <option>Tümü</option>
@@ -1493,6 +1533,15 @@ export default function App() {
                       <option>Tamamlandı</option>
                       <option>İş İptal Oldu</option>
                       <option>İhale Sonuçlandırılamadı</option>
+                    </select>
+                    <select
+                      value={requestPageSize}
+                      onChange={(e) => setRequestPageSize(Number(e.target.value))}
+                      className="rounded-xl bg-[#021026] border border-blue-400/20 px-4 py-3 text-white outline-none"
+                    >
+                      <option value={10}>10 iş göster</option>
+                      <option value={20}>20 iş göster</option>
+                      <option value={50}>50 iş göster</option>
                     </select>
                     <button onClick={handleRequestDeleteButton} className="rounded-xl bg-red-700 px-4 py-3 font-black text-white">{selectedRequestIds.length > 0 ? "Seçili işleri sil" : "Tüm talepleri temizle"}</button>
                   </div>
@@ -1518,7 +1567,7 @@ export default function App() {
                         {filteredRequests.length === 0 ? (
                           <tr><td colSpan="10" className="p-10 text-center text-slate-400">Henüz gösterilecek talep yok.</td></tr>
                         ) : (
-                          filteredRequests.map((item, index) => (
+                          paginatedFilteredRequests.map((item, index) => (
                             <tr key={item.id} className="border-t border-blue-400/10 hover:bg-white/5 align-top">
                               <td className="p-4">
                                 <input
@@ -1528,7 +1577,7 @@ export default function App() {
                                   className="w-4 h-4 accent-red-600"
                                 />
                               </td>
-                              <td className="p-4 text-slate-400">#{requests.length - index}</td>
+                              <td className="p-4 text-slate-400">#{filteredRequests.length - ((safeRequestPage - 1) * requestPageSize + index)}</td>
                               <td className="p-4"><span className={item.source === "Instagram DM" ? "bg-pink-700 text-white px-3 py-1 rounded-lg text-xs font-black" : "bg-blue-700 text-white px-3 py-1 rounded-lg text-xs font-black"}>{item.source || "Site Formu"}</span></td>
                               <td className="p-4 font-bold">{getService(item)}</td>
                               <td className="p-4">{item.district || "Belirtilmedi"}</td>
@@ -1561,6 +1610,11 @@ export default function App() {
                       </tbody>
                     </table>
                   </div>
+                  <Pagination
+                    currentPage={safeRequestPage}
+                    totalPages={requestTotalPages}
+                    onPageChange={setRequestPage}
+                  />
                 </div>
 
                 <div className="rounded-2xl bg-[#041b38]/90 border border-blue-400/20 overflow-hidden shadow-2xl">
@@ -1738,6 +1792,62 @@ function OfferBadge({ status }) {
   if (status === "won") return <span className="bg-green-50 text-green-700 px-3 py-1 rounded-lg font-black text-xs">Kazandınız</span>;
   if (status === "lost_refunded") return <span className="bg-red-50 text-red-700 px-3 py-1 rounded-lg font-black text-xs">Kaybettiniz</span>;
   return <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-lg font-black text-xs">{status}</span>;
+}
+
+function Pagination({ currentPage, totalPages, onPageChange }) {
+  if (totalPages <= 1) return null;
+
+  const pageNumbers = [];
+  for (let page = 1; page <= totalPages; page += 1) {
+    const shouldShow =
+      page === 1 ||
+      page === totalPages ||
+      Math.abs(page - currentPage) <= 1;
+
+    if (shouldShow) {
+      pageNumbers.push(page);
+    } else if (pageNumbers[pageNumbers.length - 1] !== "...") {
+      pageNumbers.push("...");
+    }
+  }
+
+  return (
+    <div className="flex items-center justify-center gap-2 p-4 border-t border-blue-400/10 bg-[#021026]/40">
+      <button
+        disabled={currentPage === 1}
+        onClick={() => onPageChange(currentPage - 1)}
+        className="px-4 py-2 rounded-lg bg-white/10 text-white font-black disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/20 transition"
+      >
+        Geri
+      </button>
+
+      {pageNumbers.map((page, index) =>
+        page === "..." ? (
+          <span key={`dots-${index}`} className="px-3 py-2 text-slate-400 font-black">...</span>
+        ) : (
+          <button
+            key={page}
+            onClick={() => onPageChange(page)}
+            className={`min-w-10 px-3 py-2 rounded-lg font-black transition ${
+              currentPage === page
+                ? "bg-blue-600 text-white"
+                : "bg-white/10 text-white hover:bg-white/20"
+            }`}
+          >
+            {page}
+          </button>
+        )
+      )}
+
+      <button
+        disabled={currentPage === totalPages}
+        onClick={() => onPageChange(currentPage + 1)}
+        className="px-4 py-2 rounded-lg bg-white/10 text-white font-black disabled:opacity-40 disabled:cursor-not-allowed hover:bg-white/20 transition"
+      >
+        İleri
+      </button>
+    </div>
+  );
 }
 
 function AdminStat({ title, value, subtitle, pink, red }) {
