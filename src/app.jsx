@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
+import izmirMap from "./assets/izmir-map.svg";
 
 const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "123456";
@@ -38,33 +39,42 @@ const IZMIR_DISTRICTS = [
 ];
 
 const DISTRICT_POSITIONS = [
-  ["Dikili", 12, 16],
-  ["Bergama", 34, 10],
-  ["Kınık", 72, 12],
-  ["Foça", 8, 36],
-  ["Aliağa", 24, 30],
-  ["Menemen", 42, 28],
-  ["Karşıyaka", 38, 40],
-  ["Bornova", 51, 42],
-  ["Kemalpaşa", 70, 42],
-  ["Bayındır", 88, 50],
-  ["Karaburun", 5, 47],
-  ["Çeşme", 7, 62],
-  ["Urla", 22, 58],
-  ["Güzelbahçe", 24, 70],
-  ["Narlıdere", 33, 62],
-  ["Balçova", 37, 55],
-  ["Konak", 43, 54],
-  ["Karabağlar", 40, 62],
-  ["Buca", 55, 56],
-  ["Gaziemir", 45, 70],
-  ["Menderes", 58, 74],
-  ["Torbalı", 68, 65],
-  ["Seferihisar", 31, 82],
-  ["Selçuk", 50, 90],
-  ["Tire", 73, 87],
-  ["Ödemiş", 85, 72],
-  ["Kiraz", 95, 86],
+  ["Dikili", 31, 26],
+  ["Bergama", 40, 22],
+  ["Kınık", 50, 30],
+  ["Aliağa", 36, 42],
+  ["Foça", 27, 48],
+  ["Menemen", 38, 52],
+
+  ["Karaburun", 13, 58],
+  ["Çeşme", 8, 72],
+  ["Urla", 17, 72],
+
+  ["Güzelbahçe", 30, 69],
+  ["Narlıdere", 35, 66],
+  ["Balçova", 37, 64],
+
+  ["Karşıyaka", 39, 59],
+  ["Çiğli", 34, 60],
+  ["Bayraklı", 42, 61],
+  ["Bornova", 45, 59],
+
+  ["Konak", 39, 66],
+  ["Karabağlar", 42, 67],
+  ["Buca", 46, 68],
+  ["Gaziemir", 41, 70],
+
+  ["Kemalpaşa", 55, 65],
+  ["Bayındır", 62, 74],
+  ["Torbalı", 50, 77],
+  ["Menderes", 39, 77],
+  ["Seferihisar", 29, 77],
+  ["Selçuk", 49, 89],
+
+  ["Tire", 64, 85],
+  ["Ödemiş", 76, 76],
+  ["Beydağ", 87, 83],
+  ["Kiraz", 92, 77],
 ];
 
 export default function App() {
@@ -381,7 +391,9 @@ export default function App() {
           <main className="lg:ml-[260px] w-full min-h-screen bg-gradient-to-br from-[#03142b] via-[#062147] to-[#020718]">
             <header className="border-b border-blue-500/20 px-6 lg:px-8 py-6 flex justify-between items-center">
               <div>
-                <h1 className="text-2xl font-black">Yönetim Paneli <span className="text-blue-400">●</span></h1>
+                <h1 className="text-2xl font-black">
+                  Yönetim Paneli <span className="text-blue-400">●</span>
+                </h1>
                 <p className="text-xs text-slate-400 mt-1">
                   {loadingRequests ? "Talepler güncelleniyor..." : "Canlı bağlantı aktif"}
                 </p>
@@ -429,7 +441,7 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 2xl:grid-cols-[1.15fr_1fr] gap-6">
+              <div className="grid grid-cols-1 2xl:grid-cols-[1.35fr_0.85fr] gap-6">
                 <div className="rounded-2xl bg-[#041b38]/90 border border-blue-400/20 overflow-hidden shadow-2xl">
                   <div className="p-5 border-b border-blue-400/20 flex flex-col lg:flex-row gap-4 justify-between">
                     <div>
@@ -570,29 +582,39 @@ export default function App() {
                     </div>
                   </div>
 
-                  <div className="relative h-[460px] bg-gradient-to-br from-[#0b376d] via-[#062147] to-[#021026] overflow-hidden">
-                    <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,#60a5fa_1px,transparent_1px)] [background-size:22px_22px]" />
+                  <div className="relative bg-[#e9eef5] p-4 overflow-visible">
+                    <img
+                      src={izmirMap}
+                      alt="İzmir Haritası"
+                      className="w-[150%] max-w-none h-auto select-none ml-[-24%]"
+                    />
 
-                    {DISTRICT_POSITIONS.map(([district, left, top], index) => {
+                    {DISTRICT_POSITIONS.map(([district, left, top]) => {
                       const count = districtCounts[district] || 0;
+
+                      let bgColor = "bg-red-500";
+
+                      if (count >= 15) bgColor = "bg-red-900";
+                      else if (count >= 10) bgColor = "bg-red-700";
+                      else if (count >= 5) bgColor = "bg-red-600";
+                      else if (count >= 1) bgColor = "bg-red-500";
+                      else bgColor = "bg-slate-500";
 
                       return (
                         <div
                           key={district}
-                          className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
+                          title={district}
+                          className="absolute -translate-x-1/2 -translate-y-1/2 group"
                           style={{ left: `${left}%`, top: `${top}%` }}
                         >
                           <div
-                            className={`px-3 py-2 rounded-2xl border shadow-lg ${
-                              count > 0
-                                ? "bg-blue-600/70 border-blue-300/40"
-                                : "bg-slate-800/70 border-slate-500/30"
-                            }`}
+                            className={`${bgColor} text-white w-6 h-6 rounded-full flex items-center justify-center font-black shadow-xl border-2 border-white hover:scale-125 transition cursor-pointer text-sm`}
                           >
-                            <p className="text-[10px] font-bold leading-none">{district}</p>
-                            <p className={`mt-1 text-lg font-black ${count > 0 ? "text-white" : "text-slate-400"}`}>
-                              {count}
-                            </p>
+                            {count}
+                          </div>
+
+                          <div className="hidden group-hover:block absolute left-1/2 -translate-x-1/2 -top-9 bg-black text-white text-xs font-bold px-3 py-1 rounded-lg whitespace-nowrap z-20">
+                            {district}
                           </div>
                         </div>
                       );
