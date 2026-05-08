@@ -4,6 +4,69 @@ const ADMIN_USERNAME = "admin";
 const ADMIN_PASSWORD = "123456";
 const API_URL = "https://ustahizli-backend.onrender.com";
 
+const IZMIR_DISTRICTS = [
+  "Aliağa",
+  "Balçova",
+  "Bayındır",
+  "Bayraklı",
+  "Bergama",
+  "Beydağ",
+  "Bornova",
+  "Buca",
+  "Çeşme",
+  "Çiğli",
+  "Dikili",
+  "Foça",
+  "Gaziemir",
+  "Güzelbahçe",
+  "Karabağlar",
+  "Karaburun",
+  "Karşıyaka",
+  "Kemalpaşa",
+  "Kınık",
+  "Kiraz",
+  "Konak",
+  "Menderes",
+  "Menemen",
+  "Narlıdere",
+  "Ödemiş",
+  "Seferihisar",
+  "Selçuk",
+  "Tire",
+  "Torbalı",
+  "Urla",
+];
+
+const DISTRICT_POSITIONS = [
+  ["Dikili", 12, 16],
+  ["Bergama", 34, 10],
+  ["Kınık", 72, 12],
+  ["Foça", 8, 36],
+  ["Aliağa", 24, 30],
+  ["Menemen", 42, 28],
+  ["Karşıyaka", 38, 40],
+  ["Bornova", 51, 42],
+  ["Kemalpaşa", 70, 42],
+  ["Bayındır", 88, 50],
+  ["Karaburun", 5, 47],
+  ["Çeşme", 7, 62],
+  ["Urla", 22, 58],
+  ["Güzelbahçe", 24, 70],
+  ["Narlıdere", 33, 62],
+  ["Balçova", 37, 55],
+  ["Konak", 43, 54],
+  ["Karabağlar", 40, 62],
+  ["Buca", 55, 56],
+  ["Gaziemir", 45, 70],
+  ["Menderes", 58, 74],
+  ["Torbalı", 68, 65],
+  ["Seferihisar", 31, 82],
+  ["Selçuk", 50, 90],
+  ["Tire", 73, 87],
+  ["Ödemiş", 85, 72],
+  ["Kiraz", 95, 86],
+];
+
 export default function App() {
   const [page, setPage] = useState("home");
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -35,23 +98,52 @@ export default function App() {
 
   useEffect(() => {
     fetchRequests();
-
-    const interval = setInterval(() => {
-      fetchRequests();
-    }, 3000);
-
+    const interval = setInterval(fetchRequests, 3000);
     return () => clearInterval(interval);
   }, []);
 
-  const getService = (item) => {
-    return item.service || item.serviceType || "Belirtilmedi";
-  };
+  const getService = (item) => item.service || item.serviceType || "Belirtilmedi";
 
   const getDate = (item) => {
     if (item.date) return item.date;
     if (!item.createdAt) return "";
     return new Date(item.createdAt).toLocaleString("tr-TR");
   };
+
+  const getStatusClass = (status) => {
+    const value = status || "Yeni";
+
+    if (value === "Yeni") return "bg-red-600 text-white";
+    if (value === "Devam Ediyor") return "bg-yellow-600 text-white";
+    if (value === "Teklif Bekliyor") return "bg-blue-600 text-white";
+    if (value === "Tamamlandı") return "bg-green-600 text-white";
+    if (value === "Tamamlanmadı") return "bg-black text-white";
+    if (value === "İptal Edildi") return "bg-black text-white";
+    if (value === "İptal") return "bg-black text-white";
+
+    return "bg-slate-700 text-white";
+  };
+
+  const instagramCount = requests.filter((item) => item.source === "Instagram DM").length;
+  const siteCount = requests.filter((item) => item.source !== "Instagram DM").length;
+  const newCount = requests.filter((item) => (item.status || "Yeni") === "Yeni").length;
+
+  const districtCounts = useMemo(() => {
+    const counts = {};
+
+    IZMIR_DISTRICTS.forEach((district) => {
+      counts[district] = 0;
+    });
+
+    requests.forEach((item) => {
+      const district = item.district || "Belirtilmedi";
+      if (counts[district] !== undefined) {
+        counts[district] += 1;
+      }
+    });
+
+    return counts;
+  }, [requests]);
 
   const filteredRequests = useMemo(() => {
     return requests.filter((item) => {
@@ -102,12 +194,7 @@ export default function App() {
 
       if (data.success) {
         alert("Talep başarıyla oluşturuldu.");
-
-        setForm({
-          ...form,
-          phone: "",
-        });
-
+        setForm({ ...form, phone: "" });
         await fetchRequests();
         setPage("home");
       }
@@ -158,7 +245,6 @@ export default function App() {
 
   const getWhatsappLink = (item) => {
     const cleanPhone = (item.phone || "").replace(/[^0-9]/g, "").replace(/^0/, "");
-
     const message = encodeURIComponent(
       "Merhaba, " + getService(item) + " talebiniz için size teklif vermek istiyoruz."
     );
@@ -170,10 +256,7 @@ export default function App() {
     return (
       <div className="min-h-screen bg-[#020718] flex items-center justify-center px-5">
         <div className="bg-white w-full max-w-md rounded-[28px] shadow-2xl p-8">
-          <button
-            onClick={() => setPage("home")}
-            className="text-sm font-bold text-blue-900 mb-6"
-          >
+          <button onClick={() => setPage("home")} className="text-sm font-bold text-blue-900 mb-6">
             ← Ana sayfaya dön
           </button>
 
@@ -230,144 +313,325 @@ export default function App() {
 
   if (page === "admin" && isLoggedIn) {
     return (
-      <div className="min-h-screen bg-[#020718] text-white">
-        <header className="max-w-7xl mx-auto px-6 py-8 flex justify-between items-center">
-          <button onClick={() => setPage("home")} className="flex items-center gap-3 font-black">
-            <span className="bg-blue-900 w-10 h-10 rounded-full flex items-center justify-center">
-              🔧
-            </span>
-            UstaHızlı
-          </button>
-
-          <button onClick={logout} className="bg-white text-slate-950 rounded-2xl px-5 py-3 font-black">
-            Çıkış yap
-          </button>
-        </header>
-
-        <section className="max-w-7xl mx-auto px-6 py-12">
-          <div className="flex flex-col md:flex-row justify-between gap-6 mb-8">
+      <div className="min-h-screen bg-[#03142b] text-white">
+        <div className="flex">
+          <aside className="hidden lg:flex w-[260px] min-h-screen bg-[#021026] border-r border-blue-500/20 flex-col justify-between fixed left-0 top-0">
             <div>
-              <p className="text-blue-300 font-black mb-2">Admin Panel</p>
-              <h1 className="text-4xl md:text-5xl font-black">Müşteri talepleri</h1>
-              <p className="text-slate-300 mt-3 max-w-3xl">
-                Site formu ve Instagram DM üzerinden gelen tüm talepler burada görünür.
-              </p>
-              <p className="text-xs text-slate-400 mt-2">
-                {loadingRequests ? "Talepler güncelleniyor..." : "Canlı bağlantı aktif. Her 3 saniyede yenilenir."}
-              </p>
-            </div>
-
-            <div className="bg-white/10 rounded-3xl p-7 text-center min-w-[140px]">
-              <p className="text-4xl font-black">{requests.length}</p>
-              <p className="text-sm text-slate-200">Toplam talep</p>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-            <input
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              placeholder="Hizmet, ilçe, açıklama veya kaynak ara"
-              className="rounded-2xl px-5 py-4 text-slate-950 outline-none"
-            />
-
-            <select
-              value={filter}
-              onChange={(e) => setFilter(e.target.value)}
-              className="rounded-2xl px-5 py-4 text-slate-950 outline-none"
-            >
-              <option>Tümü</option>
-              <option>Yeni</option>
-              <option>Bekliyor</option>
-              <option>Usta Atandı</option>
-              <option>Tamamlandı</option>
-              <option>İptal</option>
-            </select>
-
-            <button
-              onClick={clearRequests}
-              className="rounded-2xl bg-red-800 px-5 py-4 font-black text-white"
-            >
-              Tüm talepleri temizle
-            </button>
-          </div>
-
-          <div className="bg-white text-slate-900 rounded-[28px] overflow-hidden">
-            {filteredRequests.length === 0 ? (
-              <div className="p-10 text-center text-slate-500">Henüz gösterilecek talep yok.</div>
-            ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-100 text-slate-600 text-sm">
-                    <tr>
-                      <th className="p-4">Kaynak</th>
-                      <th className="p-4">Hizmet</th>
-                      <th className="p-4">İlçe</th>
-                      <th className="p-4">Telefon</th>
-                      <th className="p-4">Açıklama</th>
-                      <th className="p-4">Tarih</th>
-                      <th className="p-4">Durum</th>
-                      <th className="p-4">İşlem</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {filteredRequests.map((item) => (
-                      <tr key={item.id} className="border-t align-top">
-                        <td className="p-4">
-                          <span
-                            className={
-                              item.source === "Instagram DM"
-                                ? "bg-pink-100 text-pink-700 px-3 py-1 rounded-full text-xs font-black"
-                                : "bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-black"
-                            }
-                          >
-                            {item.source || "Site Formu"}
-                          </span>
-                        </td>
-
-                        <td className="p-4 font-bold">{getService(item)}</td>
-                        <td className="p-4">{item.district || "Belirtilmedi"}</td>
-                        <td className="p-4">{item.phone || "-"}</td>
-                        <td className="p-4 max-w-[320px]">{item.description || "-"}</td>
-                        <td className="p-4 whitespace-nowrap">{getDate(item)}</td>
-
-                        <td className="p-4">
-                          <select
-                            value={item.status || "Yeni"}
-                            onChange={(e) => updateStatus(item.id, e.target.value)}
-                            className="border rounded-xl px-3 py-2"
-                          >
-                            <option>Yeni</option>
-                            <option>Bekliyor</option>
-                            <option>Usta Atandı</option>
-                            <option>Tamamlandı</option>
-                            <option>İptal</option>
-                          </select>
-                        </td>
-
-                        <td className="p-4">
-                          {item.phone ? (
-                            <a
-                              href={getWhatsappLink(item)}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold inline-block"
-                            >
-                              WhatsApp
-                            </a>
-                          ) : (
-                            <span className="text-slate-400 text-sm">Telefon yok</span>
-                          )}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+              <div className="p-7 border-b border-blue-500/20">
+                <div className="flex items-center gap-3">
+                  <div className="w-12 h-12 rounded-2xl bg-blue-600 flex items-center justify-center text-2xl shadow-lg">
+                    🔧
+                  </div>
+                  <div>
+                    <h2 className="text-xl font-black">USTA HIZLI</h2>
+                    <p className="text-xs text-slate-400">Hizmet Burada</p>
+                  </div>
+                </div>
               </div>
-            )}
-          </div>
-        </section>
+
+              <nav className="p-5 space-y-6">
+                <div>
+                  <p className="text-xs text-slate-500 font-bold mb-3">ANA MENÜ</p>
+                  <button className="w-full bg-blue-900/60 text-left px-4 py-3 rounded-xl font-bold">
+                    🏠 Dashboard
+                  </button>
+                </div>
+
+                <div>
+                  <p className="text-xs text-slate-500 font-bold mb-3">TALEPLER</p>
+                  <div className="space-y-2">
+                    <button className="w-full flex justify-between px-4 py-3 rounded-xl hover:bg-white/5">
+                      <span>📋 Tüm Talepler</span>
+                      <b className="bg-blue-600 px-2 rounded-lg">{requests.length}</b>
+                    </button>
+                    <button className="w-full flex justify-between px-4 py-3 rounded-xl hover:bg-white/5">
+                      <span>🔔 Yeni Talepler</span>
+                      <b className="bg-red-600 px-2 rounded-lg">{newCount}</b>
+                    </button>
+                    <button className="w-full flex justify-between px-4 py-3 rounded-xl hover:bg-white/5">
+                      <span>📸 Instagram DM</span>
+                      <b className="bg-pink-600 px-2 rounded-lg">{instagramCount}</b>
+                    </button>
+                    <button className="w-full flex justify-between px-4 py-3 rounded-xl hover:bg-white/5">
+                      <span>🌐 Site Formları</span>
+                      <b className="bg-blue-600 px-2 rounded-lg">{siteCount}</b>
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs text-slate-500 font-bold mb-3">SİSTEM</p>
+                  <div className="space-y-2">
+                    <button className="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5">
+                      📍 İlçe Haritası
+                    </button>
+                    <button className="w-full text-left px-4 py-3 rounded-xl hover:bg-white/5">
+                      ⚙️ Ayarlar
+                    </button>
+                  </div>
+                </div>
+              </nav>
+            </div>
+
+            <button onClick={logout} className="m-5 text-left text-red-400 font-black">
+              ↪ Çıkış Yap
+            </button>
+          </aside>
+
+          <main className="lg:ml-[260px] w-full min-h-screen bg-gradient-to-br from-[#03142b] via-[#062147] to-[#020718]">
+            <header className="border-b border-blue-500/20 px-6 lg:px-8 py-6 flex justify-between items-center">
+              <div>
+                <h1 className="text-2xl font-black">Yönetim Paneli <span className="text-blue-400">●</span></h1>
+                <p className="text-xs text-slate-400 mt-1">
+                  {loadingRequests ? "Talepler güncelleniyor..." : "Canlı bağlantı aktif"}
+                </p>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="relative w-12 h-12 rounded-2xl bg-[#082851] flex items-center justify-center">
+                  🔔
+                  {newCount > 0 && (
+                    <span className="absolute -top-2 -right-2 bg-red-600 text-white text-xs w-6 h-6 rounded-full flex items-center justify-center font-black">
+                      {newCount}
+                    </span>
+                  )}
+                </div>
+                <button onClick={logout} className="bg-white text-slate-950 rounded-2xl px-5 py-3 font-black lg:hidden">
+                  Çıkış yap
+                </button>
+              </div>
+            </header>
+
+            <section className="p-6 lg:p-8">
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-5 mb-6">
+                <div className="rounded-2xl bg-blue-950/70 border border-blue-400/20 p-6 shadow-xl">
+                  <p className="font-bold text-slate-300">Toplam Talep</p>
+                  <h2 className="text-4xl font-black mt-2">{requests.length}</h2>
+                  <p className="text-sm text-slate-400 mt-2">Tüm zamanlar</p>
+                </div>
+
+                <div className="rounded-2xl bg-pink-950/50 border border-pink-400/30 p-6 shadow-xl">
+                  <p className="font-bold text-slate-300">Instagram DM</p>
+                  <h2 className="text-4xl font-black mt-2">{instagramCount}</h2>
+                  <p className="text-sm text-slate-400 mt-2">Mesajdan gelen talepler</p>
+                </div>
+
+                <div className="rounded-2xl bg-blue-950/70 border border-blue-400/20 p-6 shadow-xl">
+                  <p className="font-bold text-slate-300">Site Formları</p>
+                  <h2 className="text-4xl font-black mt-2">{siteCount}</h2>
+                  <p className="text-sm text-slate-400 mt-2">Formdan gelen talepler</p>
+                </div>
+
+                <div className="rounded-2xl bg-red-950/50 border border-red-400/30 p-6 shadow-xl">
+                  <p className="font-bold text-slate-300">Yeni Talepler</p>
+                  <h2 className="text-4xl font-black mt-2">{newCount}</h2>
+                  <p className="text-sm text-slate-400 mt-2">Aksiyon bekliyor</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 2xl:grid-cols-[1.15fr_1fr] gap-6">
+                <div className="rounded-2xl bg-[#041b38]/90 border border-blue-400/20 overflow-hidden shadow-2xl">
+                  <div className="p-5 border-b border-blue-400/20 flex flex-col lg:flex-row gap-4 justify-between">
+                    <div>
+                      <h2 className="text-2xl font-black">Talep Listesi</h2>
+                      <p className="text-xs text-slate-400 mt-1">Instagram DM ve site formları</p>
+                    </div>
+
+                    <button onClick={fetchRequests} className="bg-blue-600 px-5 py-3 rounded-xl font-black">
+                      Yenile
+                    </button>
+                  </div>
+
+                  <div className="p-5 grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <input
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      placeholder="Hizmet, ilçe, açıklama ara"
+                      className="rounded-xl bg-[#021026] border border-blue-400/20 px-4 py-3 text-white outline-none"
+                    />
+
+                    <select
+                      value={filter}
+                      onChange={(e) => setFilter(e.target.value)}
+                      className="rounded-xl bg-[#021026] border border-blue-400/20 px-4 py-3 text-white outline-none"
+                    >
+                      <option>Tümü</option>
+                      <option>Yeni</option>
+                      <option>Devam Ediyor</option>
+                      <option>Teklif Bekliyor</option>
+                      <option>Tamamlandı</option>
+                      <option>Tamamlanmadı</option>
+                      <option>İptal Edildi</option>
+                    </select>
+
+                    <button onClick={clearRequests} className="rounded-xl bg-red-700 px-4 py-3 font-black text-white">
+                      Tüm talepleri temizle
+                    </button>
+                  </div>
+
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-[#021026] text-slate-400">
+                        <tr>
+                          <th className="p-4">ID</th>
+                          <th className="p-4">Kaynak</th>
+                          <th className="p-4">Hizmet</th>
+                          <th className="p-4">İlçe</th>
+                          <th className="p-4">Telefon</th>
+                          <th className="p-4">Açıklama</th>
+                          <th className="p-4">Durum</th>
+                          <th className="p-4">Tarih</th>
+                          <th className="p-4">İşlem</th>
+                        </tr>
+                      </thead>
+
+                      <tbody>
+                        {filteredRequests.length === 0 ? (
+                          <tr>
+                            <td colSpan="9" className="p-10 text-center text-slate-400">
+                              Henüz gösterilecek talep yok.
+                            </td>
+                          </tr>
+                        ) : (
+                          filteredRequests.map((item, index) => (
+                            <tr key={item.id} className="border-t border-blue-400/10 hover:bg-white/5 align-top">
+                              <td className="p-4 text-slate-400">#{requests.length - index}</td>
+
+                              <td className="p-4">
+                                <span
+                                  className={
+                                    item.source === "Instagram DM"
+                                      ? "bg-pink-700 text-white px-3 py-1 rounded-lg text-xs font-black"
+                                      : "bg-blue-700 text-white px-3 py-1 rounded-lg text-xs font-black"
+                                  }
+                                >
+                                  {item.source || "Site Formu"}
+                                </span>
+                              </td>
+
+                              <td className="p-4 font-bold">{getService(item)}</td>
+                              <td className="p-4">{item.district || "Belirtilmedi"}</td>
+                              <td className="p-4">{item.phone || "-"}</td>
+                              <td className="p-4 max-w-[280px] text-slate-300">{item.description || "-"}</td>
+
+                              <td className="p-4">
+                                <select
+                                  value={item.status || "Yeni"}
+                                  onChange={(e) => updateStatus(item.id, e.target.value)}
+                                  className={`${getStatusClass(item.status)} rounded-lg px-3 py-2 outline-none font-bold`}
+                                >
+                                  <option>Yeni</option>
+                                  <option>Devam Ediyor</option>
+                                  <option>Teklif Bekliyor</option>
+                                  <option>Tamamlandı</option>
+                                  <option>Tamamlanmadı</option>
+                                  <option>İptal Edildi</option>
+                                </select>
+                              </td>
+
+                              <td className="p-4 whitespace-nowrap text-slate-300">{getDate(item)}</td>
+
+                              <td className="p-4">
+                                {item.phone ? (
+                                  <a
+                                    href={getWhatsappLink(item)}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="bg-green-600 text-white px-4 py-2 rounded-xl font-bold inline-block"
+                                  >
+                                    WhatsApp
+                                  </a>
+                                ) : (
+                                  <span className="text-slate-500 text-sm">Telefon yok</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div className="p-4 border-t border-blue-400/20 flex flex-wrap gap-3 text-xs">
+                    <span className="bg-red-600 px-3 py-2 rounded-lg font-bold">Yeni</span>
+                    <span className="bg-yellow-600 px-3 py-2 rounded-lg font-bold">Devam Ediyor</span>
+                    <span className="bg-blue-600 px-3 py-2 rounded-lg font-bold">Teklif Bekliyor</span>
+                    <span className="bg-green-600 px-3 py-2 rounded-lg font-bold">Tamamlandı</span>
+                    <span className="bg-black px-3 py-2 rounded-lg font-bold">Tamamlanmadı</span>
+                    <span className="bg-black px-3 py-2 rounded-lg font-bold">İptal Edildi</span>
+                  </div>
+                </div>
+
+                <div className="rounded-2xl bg-[#041b38]/90 border border-blue-400/20 overflow-hidden shadow-2xl">
+                  <div className="p-5 border-b border-blue-400/20 flex justify-between items-center">
+                    <div>
+                      <h2 className="text-2xl font-black">İzmir İlçe Haritası</h2>
+                      <p className="text-xs text-slate-400 mt-1">Haritadaki sayılar aktif talepleri gösterir.</p>
+                    </div>
+                  </div>
+
+                  <div className="relative h-[460px] bg-gradient-to-br from-[#0b376d] via-[#062147] to-[#021026] overflow-hidden">
+                    <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_center,#60a5fa_1px,transparent_1px)] [background-size:22px_22px]" />
+
+                    {DISTRICT_POSITIONS.map(([district, left, top], index) => {
+                      const count = districtCounts[district] || 0;
+
+                      return (
+                        <div
+                          key={district}
+                          className="absolute -translate-x-1/2 -translate-y-1/2 text-center"
+                          style={{ left: `${left}%`, top: `${top}%` }}
+                        >
+                          <div
+                            className={`px-3 py-2 rounded-2xl border shadow-lg ${
+                              count > 0
+                                ? "bg-blue-600/70 border-blue-300/40"
+                                : "bg-slate-800/70 border-slate-500/30"
+                            }`}
+                          >
+                            <p className="text-[10px] font-bold leading-none">{district}</p>
+                            <p className={`mt-1 text-lg font-black ${count > 0 ? "text-white" : "text-slate-400"}`}>
+                              {count}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <div className="p-5 border-t border-blue-400/20">
+                    <h3 className="font-black mb-4">İlçelere Göre Aktif Talep Sayıları</h3>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                      {IZMIR_DISTRICTS.map((district) => (
+                        <div key={district} className="bg-[#021026] border border-blue-400/10 rounded-xl px-3 py-2 flex justify-between">
+                          <span className="text-sm">{district}</span>
+                          <b className={districtCounts[district] > 0 ? "text-red-400" : "text-slate-500"}>
+                            {districtCounts[district] || 0}
+                          </b>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 border-t border-blue-400/20">
+                    <div className="p-5 border-r border-blue-400/20">
+                      <p className="text-slate-400 text-sm">Toplam İlçe</p>
+                      <p className="text-2xl font-black">30</p>
+                    </div>
+                    <div className="p-5 border-r border-blue-400/20">
+                      <p className="text-slate-400 text-sm">Kapsam Alanı</p>
+                      <p className="text-xl font-black">İzmir Geneli</p>
+                    </div>
+                    <div className="p-5">
+                      <p className="text-slate-400 text-sm">Hizmet Durumu</p>
+                      <p className="text-xl font-black text-green-400">● Aktif</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </section>
+          </main>
+        </div>
       </div>
     );
   }
@@ -452,13 +716,9 @@ export default function App() {
               onChange={(e) => setForm({ ...form, district: e.target.value })}
               className="w-full rounded-2xl px-5 py-4 mb-6 text-slate-950 outline-none"
             >
-              <option>Bornova</option>
-              <option>Karşıyaka</option>
-              <option>Konak</option>
-              <option>Buca</option>
-              <option>Bayraklı</option>
-              <option>Çiğli</option>
-              <option>Gaziemir</option>
+              {IZMIR_DISTRICTS.map((district) => (
+                <option key={district}>{district}</option>
+              ))}
             </select>
 
             <label className="block text-sm font-bold mb-2">Telefon numarası</label>
@@ -473,15 +733,6 @@ export default function App() {
               Teklif Talebi Oluştur
             </button>
           </form>
-        </div>
-      </section>
-
-      <section id="nasil" className="py-20 bg-white">
-        <div className="max-w-7xl mx-auto px-6 text-center">
-          <h2 className="text-4xl font-black mb-4">Nasıl çalışır?</h2>
-          <p className="text-slate-600 mb-12">
-            Talep oluştur, admin panelinde değerlendirilir, müşteriye WhatsApp’tan teklif gönder.
-          </p>
         </div>
       </section>
 
